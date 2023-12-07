@@ -70,6 +70,7 @@ namespace Entidades.Modelos
         /// </summary>
         private void IniciarIngreso()
         {
+            CancellationToken token = this.cancellation.Token;
             this.tarea = Task.Run(() =>
             {
                 while (!this.cancellation.IsCancellationRequested)
@@ -89,7 +90,7 @@ namespace Entidades.Modelos
                     }
 
                 }
-            });
+            },token);
         }
         /// <summary>
         /// El metodo chequeara si no existe un ingreso, inicializara la preparacion y despues invocara el evento

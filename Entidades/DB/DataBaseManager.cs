@@ -52,12 +52,20 @@ namespace Entidades.DataBase
                 
                 }
             }
+            catch(ComidaInvalidaExeption ex)
+            {
+                throw;
+            }
+            catch (SqlException ex)
+            {
+                throw new Exception(ex.Message);
+            }
             catch (Exception error)
             {
                 throw new Exception($"Error al acceder a la base de datos: {error}");
             }
+            return imagen;  
 
-            return imagen;
         }
 
         /// <summary>

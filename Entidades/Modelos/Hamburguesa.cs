@@ -48,12 +48,12 @@ namespace Entidades.Modelos
         {
             if (!Estado)
             {
-                this.estado = true;
                 int numeroRand = new Random().Next(1, 9);
 
                 this.imagen =DataBaseManager.GetImageComida($"Hamburguesa_{numeroRand}");
 
                 AgregarIngredientes();
+                this.estado = true;
             }
         }
         /// <summary>

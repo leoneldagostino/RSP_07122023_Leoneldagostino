@@ -6,7 +6,7 @@ using System.Runtime.CompilerServices;
 
 namespace Entidades.Modelos
 {
-    public delegate void DelegadoNuevoIngreso(IComestible menu);
+    public delegate void DelegadoPedidoEnCurso(IComestible menu);
     public delegate void DelegadoDemoraAtencion(double demora);
 
 
@@ -15,14 +15,19 @@ namespace Entidades.Modelos
 
     {
         public event DelegadoDemoraAtencion OnDemora;
-        public event DelegadoNuevoIngreso OnIngreso;
+        public event DelegadoPedidoEnCurso OnPedido;
 
         private int cantPedidosFinalizados;
         private string nombre;
         private double demoraPreparacionTotal;
         private CancellationTokenSource cancellation;
-        private T menu;
+        private T pedidosEnPreparacion;
         private Task tarea;
+
+        //CAMBIOS NUEVOS
+        private Mozo<T> mozo;
+        private Queue<T> queue;
+
 
 
 
@@ -34,10 +39,26 @@ namespace Entidades.Modelos
         public Cocinero(string nombre)
         {
             this.nombre = nombre;
+            this.mozo = new Mozo<T>();
+            this.queue = new Queue<T>();
+
+            this.mozo.OnPedido += TomarNuevoPedido;
         }
 
+        private void TomarNuevoPedido(T menu)
+        {
+            if(OnPedido != null)
+            {
+                queue.Enqueue(menu);
+            }
+        }
+
+
         //No hacer nada
-        
+        public Queue<T> Pedidos
+        {
+            get { return queue; }
+        } 
         public bool HabilitarCocina
         {
             get
@@ -51,10 +72,12 @@ namespace Entidades.Modelos
                 if (value && !this.HabilitarCocina)
                 {
                     this.cancellation = new CancellationTokenSource();
-                    this.IniciarIngreso();
+                    this.mozo.EmpezarATrabajar = true;
+                    this.EmpezarACocinar();
                 }
                 else
                 {
+                    this.mozo.EmpezarATrabajar = false;
                     this.cancellation.Cancel();
                 }
             }
@@ -68,44 +91,38 @@ namespace Entidades.Modelos
         /// <summary>
         /// El metodo realizara realizara en otro hilo el ingreso, de nuevos clientes.
         /// </summary>
-        private void IniciarIngreso()
+        private void EmpezarACocinar()
         {
-            CancellationToken token = this.cancellation.Token;
-            this.tarea = Task.Run(() =>
+            
+            this.tarea = Task.Run((Action)(() =>
             {
                 while (!this.cancellation.IsCancellationRequested)
                 {
-                    NotificarNuevoIngreso();
-                    EsperarProximoIngreso();
-                    this.cantPedidosFinalizados++;
-                    try
+                    if(queue.Count > 0)
                     {
-                        DataBaseManager.GuardarTicket<T>(Nombre, menu);
                         
-                    }
-                    catch(DataBaseManagerException ex)
-                    {
-                        FileManager.Guardar(ex.Message, "logs.txt", true);
+                        pedidosEnPreparacion = queue.Dequeue();
+                        EsperarProximoIngreso();
+                        this.cantPedidosFinalizados++;
+                        try
+                        {
+                            DataBaseManager.GuardarTicket<T>(Nombre, (T)this.pedidosEnPreparacion);
+                        
+                        }
+                        catch(DataBaseManagerException ex)
+                        {
+                            FileManager.Guardar(ex.Message, "logs.txt", true);
                      
+                        }
                     }
 
                 }
-            },token);
+            }));
         }
         /// <summary>
         /// El metodo chequeara si no existe un ingreso, inicializara la preparacion y despues invocara el evento
         /// </summary>
-        private void NotificarNuevoIngreso()
-        {
-            if (this.OnIngreso != null)
-            {
-                this.menu = new T();
 
-                this.menu.InicializarPreparacion();
-
-                this.OnIngreso.Invoke(this.menu);
-            }
-        }
 
 
         /// <summary>
@@ -118,7 +135,7 @@ namespace Entidades.Modelos
             int tiempoEspera = 0;
             if (this.OnDemora != null)
             {
-                while(!this.cancellation.IsCancellationRequested && menu.Estado)
+                while(!this.cancellation.IsCancellationRequested && pedidosEnPreparacion.Estado)
                 {
                     Thread.Sleep(1000);
 
